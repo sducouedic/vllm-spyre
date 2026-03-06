@@ -481,6 +481,3 @@ models:
         assert cb_config.device_config is not None
         assert cb_config.device_config.env_vars["TEST_VAR"] == "123"
         assert cb_config.device_config.num_gpu_blocks_override == 8192
-
-
-# Made with Bob

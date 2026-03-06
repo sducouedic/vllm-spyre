@@ -96,6 +96,3 @@ class TestStructuredOutputValidation:
 
         # PoolingParams don't have structured_outputs, so just verify no exception
         assert True  # If we got here, the early return worked
-
-
-# Made with Bob

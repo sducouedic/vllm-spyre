@@ -506,6 +506,3 @@ models:
         assert configurator.device_config is None, (
             "Static batching configs should not have device_config"
         )
-
-
-# Made with Bob

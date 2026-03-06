@@ -383,6 +383,3 @@ def get_model_registry() -> ModelConfigRegistry:
     if not registry._initialized:
         registry.initialize()
     return registry
-
-
-# Made with Bob

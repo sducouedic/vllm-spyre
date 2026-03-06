@@ -1,82 +1,122 @@
-import sys
-from typing import TYPE_CHECKING
+"""Spyre platform plugin for vLLM.
 
-# When running this plugin on a Mac, we assume it's for local development
-# purposes. However, due to a compatibility issue with vLLM, which overrides
-# the Triton module with a placeholder, vLLM may fail to load on macOS. To
-# mitigate this issue, we can safely remove the Triton module (if imported)
-# and rely on PyTorch to handle the absence of Triton, ensuring fine execution
-# in eager mode.
-if sys.platform.startswith("darwin"):
-    if sys.modules.get("triton"):
-        del sys.modules["triton"]
+This module provides the SpyrePlatform class that registers Spyre as a
+hardware backend for vLLM, following the plugin architecture pattern
+established by vLLM-Ascend.
+"""
 
-from vllm.logger import init_logger
-from vllm.platforms import PlatformEnum
-from vllm.platforms.cpu import CpuPlatform
-
-if TYPE_CHECKING:
-    # NB: We can't eagerly import many things from vllm since vllm.config
-    # will import this file. These would lead to circular imports
-    from vllm.config import VllmConfig
-else:
-    VllmConfig = None
-
-logger = init_logger(__name__)
+from typing import Optional
+from vllm.platforms.interface import Platform, PlatformEnum
+from vllm.config import VllmConfig
 
 
-class TorchSpyrePlatform(CpuPlatform):
-    _enum = PlatformEnum.OOT
-
-    # "spyre" device_name no longer worked due to https://github.com/vllm-project/vllm/pull/16464
-    device_name: str = "cpu"
-    device_type: str = "cpu"
-
+class SpyrePlatform(Platform):
+    """Platform plugin for IBM Spyre AI accelerator.
+    
+    This class integrates Spyre hardware with vLLM by:
+    1. Registering the SpyreCompiler backend
+    2. Configuring compilation settings for Spyre
+    3. Optionally providing graph wrapper for runtime optimization
+    
+    The platform follows vLLM's plugin architecture, allowing out-of-tree
+    (OOT) integration without modifying vLLM core code.
+    """
+    
+    _enum = PlatformEnum.SPYRE
+    device_name: str = "spyre"
+    device_type: str = "spyre"
+    
     @classmethod
-    def get_device_name(cls, device_id: int = 0) -> str:
-        return "torch-spyre"
-
+    def get_compile_backend(cls) -> str:
+        """Return Spyre compiler backend class path.
+        
+        This method tells vLLM which compiler to use for Spyre hardware.
+        The returned string is a fully-qualified class path that vLLM
+        will dynamically import and instantiate.
+        
+        Returns:
+            str: Fully-qualified path to SpyreCompiler class
+        """
+        return "vllm_spyre_next.compilation.compiler_interface.SpyreCompiler"
+    
+    @classmethod
+    def get_static_graph_wrapper_cls(cls) -> Optional[str]:
+        """Return graph wrapper class path (optional).
+        
+        Graph wrappers are runtime optimizations that capture execution
+        graphs per batch size to eliminate repeated kernel launch overhead.
+        
+        Phase 1-2: Return None (no graph wrapper)
+        - Focus on core compilation and caching first
+        - Measure baseline performance
+        
+        Phase 3 (optional): Enable graph wrapper if benchmarks show benefit
+        - Uncomment the return statement below
+        - Implement SpyreGraphWrapper in compilation/spyre_graph.py
+        - Only proceed if launchKernel() overhead > 5% of execution time
+        
+        Returns:
+            Optional[str]: Fully-qualified path to SpyreGraphWrapper class,
+                or None if graph wrapper is not needed
+        """
+        # Phase 1-2: No graph wrapper
+        return None
+        
+        # Phase 3 (if needed): Enable graph wrapper
+        # return "vllm_spyre_next.compilation.spyre_graph.SpyreGraphWrapper"
+    
     @classmethod
     def check_and_update_config(cls, vllm_config: VllmConfig) -> None:
-        # ---- worker ----
-        parallel_config = vllm_config.parallel_config
-        if parallel_config.worker_cls == "auto":
-            # "auto" defaults to the CPUWorker as we inherit from the CpuPlatform
-            worker_class = "vllm.v1.worker.cpu_worker.CPUWorker"
-            # if a torch spyre specific worker class is needed it can be loaded with
-            # worker_class = "vllm_spyre_next.v1.worker.spyre_worker.TorchSpyreWorker"
-            logger.info("Loading worker from: %s", worker_class)
-            parallel_config.worker_cls = worker_class
+        """Configure compilation settings for Spyre.
+        
+        This method is called by vLLM during initialization to configure
+        compilation settings specific to Spyre hardware. It:
+        
+        1. Disables standard Inductor (uses torch-spyre's Inductor extension)
+        2. Configures piecewise compilation splitting operations
+        3. Sets Spyre-specific hardware parameters
+        
+        Args:
+            vllm_config: vLLM configuration to update
+        """
+        compilation_config = vllm_config.compilation_config
+        
+        # Disable standard Inductor - use torch-spyre's Inductor extension
+        # torch-spyre provides its own Inductor backend that generates
+        # SuperDSC JSON instead of standard Triton/C++ code
+        compilation_config.use_inductor = False
+        
+        # Configure piecewise compilation if enabled
+        # Piecewise compilation splits the model into subgraphs at specific
+        # operations to enable better optimization and caching
+        if compilation_config.cudagraph_mode.has_piecewise_cudagraphs():
+            # Set splitting operations for Spyre
+            # These operations are good split points because they:
+            # - Have clear input/output boundaries
+            # - Benefit from separate compilation
+            # - Enable better cache reuse
+            compilation_config.splitting_ops = [
+                "aten.mm.default",      # Matrix multiplication
+                "aten.addmm.default",   # Add + matrix multiplication
+                "aten.bmm.default",     # Batch matrix multiplication
+            ]
+        
+        # Spyre-specific hardware configuration
+        # These settings affect compilation and must match the hardware
+        compilation_config.spyre_enable_static_kernel = True
+        compilation_config.spyre_core_count = 32
+        compilation_config.spyre_stick_alignment = 128
 
-        # ---- model runner ----
-        # A custom model runner has to be added to a potential TorchSpyreWorker class:
-        # TorchSpyreWorker.model_runner = TorchSpyreModelRunner (see SpyreWorker for reference)
-        # The default vllm.v1.worker.cpu_worker.CPUWorker uses
-        # vllm.v1.worker.cpu_model_runner.CPUModelRunner
 
-        # ---- scheduler ----
-        scheduler_config = vllm_config.scheduler_config
-        # default scheduler
-        scheduler_class = "vllm.v1.core.sched.scheduler.Scheduler"
-        # if a torch spyre specific scheduler class is needed it can be loaded with
-        # scheduler_class = "vllm_spyre_next.v1.core.scheduler.TorchSpyreScheduler"
-        logger.info("Loading scheduler from: %s", scheduler_class)
-        scheduler_config.scheduler_cls = scheduler_class
-
-        # ---- attention backend ----
-        # A custom attention backend can be registered with get_attn_backend_cls()
-        # see copied code from vllm/platforms/cpu.CpuPlatform illustrating the default
-        # TorchSDPABackend used for vLLM CPU execution
-
-        # @classmethod
-        # def get_attn_backend_cls(cls, selected_backend: _Backend, head_size: int,
-        #                      dtype: torch.dtype, kv_cache_dtype: Optional[str],
-        #                      block_size: int, use_v1: bool,
-        #                      use_mla: bool) -> str:
-        #     if selected_backend and selected_backend != _Backend.TORCH_SDPA:
-        #         logger.info("Cannot use %s backend on CPU.", selected_backend)
-        #     logger.info("Using Torch SDPA backend.")
-        #     return "vllm.attention.backends.torch_sdpa.TorchSDPABackend"
-
-        # call CpuPlatform.check_and_update_config()
-        super().check_and_update_config(vllm_config)
+def register() -> None:
+    """Entry point for vLLM platform plugin.
+    
+    This function is called by vLLM's plugin system during initialization.
+    It registers the SpyrePlatform with vLLM's platform registry.
+    
+    The entry point is configured in pyproject.toml:
+    [project.entry-points."vllm.platform_plugins"]
+    spyre_next = "vllm_spyre_next:register"
+    """
+    from vllm.platforms import register_platform
+    register_platform(SpyrePlatform)

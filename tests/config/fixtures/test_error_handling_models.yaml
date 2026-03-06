@@ -26,5 +26,3 @@ models:
             VLLM_DT_MAX_BATCH_TKV_LIMIT: 131072
           num_gpu_blocks_override:
             default: 8192
-
-# Made with Bob

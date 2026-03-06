@@ -209,5 +209,3 @@ models:
         warmup_shapes:
           - prompt_len: 128
             batch_size: 8
-
-# Made with Bob

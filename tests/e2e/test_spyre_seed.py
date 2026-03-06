@@ -145,6 +145,3 @@ def test_seed_variability(
             break
 
     assert any_different, "Unseeded outputs should produce different results between requests"
-
-
-# Made with Bob

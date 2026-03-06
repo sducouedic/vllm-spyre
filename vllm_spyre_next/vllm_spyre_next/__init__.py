@@ -1,58 +1,36 @@
-import importlib.metadata
-import json
-from logging.config import dictConfig
-from typing import Any
+"""vLLM-Spyre Next: Next-generation vLLM integration for IBM Spyre AI accelerator.
 
-from vllm.envs import VLLM_CONFIGURE_LOGGING, VLLM_LOGGING_CONFIG_PATH
-from vllm.logger import DEFAULT_LOGGING_CONFIG
+This package provides a vLLM platform plugin for Spyre hardware, implementing:
+- Phase 1: Core compiler interface (SpyreCompiler)
+- Phase 2: Artifact caching with 3-level strategy
+- Phase 3 (optional): Graph wrapper for runtime optimization
 
-__version__ = importlib.metadata.version("vllm_spyre_next")
+The integration follows vLLM-Ascend's plugin architecture pattern, enabling
+out-of-tree (OOT) integration without modifying vLLM core code.
 
+Entry Point:
+    The register() function is called by vLLM's plugin system during
+    initialization. It is configured in pyproject.toml:
+    
+    [project.entry-points."vllm.platform_plugins"]
+    spyre_next = "vllm_spyre_next:register"
 
-def register():
-    """Register the Spyre platform."""
-    return "vllm_spyre_next.platform.TorchSpyrePlatform"
+Usage:
+    # vLLM automatically discovers and loads the plugin
+    # No explicit import needed in user code
+    
+    from vllm import LLM
+    
+    # vLLM detects Spyre hardware and uses SpyreCompiler
+    llm = LLM(model="meta-llama/Llama-2-7b-hf")
+    outputs = llm.generate("Hello, my name is")
+"""
 
+from vllm_spyre_next.platform import register
 
-def _init_logging():
-    """Setup logging, extending from the vLLM logging config"""
-    config = dict[str, Any]()
+__all__ = ["register"]
 
-    if VLLM_CONFIGURE_LOGGING:
-        config = {**DEFAULT_LOGGING_CONFIG}
-
-    if VLLM_LOGGING_CONFIG_PATH:
-        # Error checks must be done already in vllm.logger.py
-        with open(VLLM_LOGGING_CONFIG_PATH, encoding="utf-8") as file:
-            config = json.loads(file.read())
-
-    if VLLM_CONFIGURE_LOGGING:
-        # Copy the vLLM logging configurations for our package
-        if "vllm_spyre_next" not in config["formatters"]:
-            if "vllm" in config["formatters"]:
-                config["formatters"]["vllm_spyre_next"] = config["formatters"]["vllm"]
-            else:
-                config["formatters"]["vllm_spyre_next"] = DEFAULT_LOGGING_CONFIG["formatters"][
-                    "vllm"
-                ]
-
-        if "vllm_spyre_next" not in config["handlers"]:
-            if "vllm" in config["handlers"]:
-                handler_config = config["handlers"]["vllm"]
-            else:
-                handler_config = DEFAULT_LOGGING_CONFIG["handlers"]["vllm"]
-            handler_config["formatter"] = "vllm_spyre_next"
-            config["handlers"]["vllm_spyre_next"] = handler_config
-
-        if "vllm_spyre_next" not in config["loggers"]:
-            if "vllm" in config["loggers"]:
-                logger_config = config["loggers"]["vllm"]
-            else:
-                logger_config = DEFAULT_LOGGING_CONFIG["loggers"]["vllm"]
-            logger_config["handlers"] = ["vllm_spyre_next"]
-            config["loggers"]["vllm_spyre_next"] = logger_config
-
-    dictConfig(config)
-
-
-_init_logging()
+# Version information
+__version__ = "0.1.0"
+__author__ = "IBM Research"
+__description__ = "vLLM integration for IBM Spyre AI accelerator"

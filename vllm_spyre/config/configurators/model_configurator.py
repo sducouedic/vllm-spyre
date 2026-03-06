@@ -270,6 +270,3 @@ class ModelConfigurator:
             error_context=f"user set --num-gpu-blocks-override={user_value}",
         )
         return config_value
-
-
-# Made with Bob

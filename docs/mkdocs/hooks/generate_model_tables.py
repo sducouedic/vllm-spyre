@@ -174,6 +174,3 @@ def on_startup(command: Literal["build", "gh-deploy", "serve"], dirty: bool):
     update_supported_models_doc(generative_table, pooling_table)
 
     print(f"Updated {SUPPORTED_MODELS_PATH}")
-
-
-# Made with Bob

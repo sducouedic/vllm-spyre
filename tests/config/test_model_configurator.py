@@ -520,6 +520,3 @@ class TestConfigurationSummaryLogging:
         log_text = caplog_vllm_spyre.text
         assert "Applied registry configuration for 'test-model' (TP=1):" in log_text
         assert "no device-specific configs" in log_text
-
-
-# Made with Bob

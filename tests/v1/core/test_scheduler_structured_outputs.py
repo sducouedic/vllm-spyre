@@ -251,6 +251,3 @@ class TestSchedulerStructuredOutputHandling:
         # But structured_output_request should be None
         assert request.structured_output_request is None
         assert request.status == RequestStatus.WAITING
-
-
-# Made with Bob

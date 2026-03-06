@@ -234,6 +234,3 @@ class TestConfiguratorEdgeCases:
             # Restore permissions and cleanup
             os.chmod(temp_path, 0o644)
             temp_path.unlink()
-
-
-# Made with Bob

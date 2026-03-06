@@ -104,6 +104,3 @@ def create_vllm_config(
     vllm_config.cache_config = Mock(num_gpu_blocks_override=num_gpu_blocks_override)
 
     return vllm_config
-
-
-# Made with Bob

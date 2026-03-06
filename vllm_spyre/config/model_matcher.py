@@ -117,6 +117,3 @@ class ModelMatcher:
 
         logger.debug("Model '%s': HF config matches pattern", model_name)
         return True
-
-
-# Made with Bob

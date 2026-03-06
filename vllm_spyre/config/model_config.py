@@ -304,6 +304,3 @@ class ModelConfig:
             static_batching_configs=static_configs,
             continuous_batching_configs=continuous_configs,
         )
-
-
-# Made with Bob

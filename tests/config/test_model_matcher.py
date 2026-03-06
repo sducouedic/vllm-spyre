@@ -273,6 +273,3 @@ class TestModelMatcherEdgeCases:
         )
 
         assert not matcher.matches(hf_config, pattern)
-
-
-# Made with Bob

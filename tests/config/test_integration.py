@@ -214,6 +214,3 @@ class TestGraniteVersionAwareOverrides:
             hdma_size = os.getenv("FLEX_HDMA_P2PSIZE")
             assert hdma_size is not None, "FLEX_HDMA_P2PSIZE should be set"
             assert int(hdma_size) == 256 * 1024 * 1024
-
-
-# Made with Bob

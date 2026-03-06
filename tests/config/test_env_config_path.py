@@ -106,6 +106,3 @@ models:
                 assert len(registry.list_models()) == 0
         finally:
             os.unlink(empty_path)
-
-
-# Made with Bob
