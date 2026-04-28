@@ -11,6 +11,7 @@ from vllm.v1.request import Request, RequestStatus
 
 import sendnn_inference.envs as envs_spyre
 from sendnn_inference.platform import SpyrePlatform
+from sendnn_inference.v1.core import cp_scheduler_logger
 from sendnn_inference.v1.worker.spyre_model_runner import SpyreModelRunnerOutput
 
 if TYPE_CHECKING:
@@ -197,6 +198,10 @@ class ChunkedPrefillSpyreScheduler(SpyreScheduler):
             "Expecting the env var VLLM_DT_MAX_BATCH_TKV_LIMIT to be set in platform.py"
         )
 
+        self._cp_steps_logger = cp_scheduler_logger.create_cp_scheduler_logger(
+            self.scheduler_config.max_model_len, self.scheduler_config.max_num_seqs, self.block_size
+        )
+
     def update_from_output(self, scheduler_output, model_runner_output):
         assert isinstance(model_runner_output, SpyreModelRunnerOutput), (
             "Expecting an instance of CPSpyreModelRunnerOutput when doing chunked prefill."
@@ -225,6 +230,7 @@ class ChunkedPrefillSpyreScheduler(SpyreScheduler):
         ]
 
         self.tkv = model_runner_output.tkv
+        self._cp_steps_logger.log(model_runner_output, self.waiting, self.running, self.tkv)
         return super(SpyreScheduler, self).update_from_output(scheduler_output, model_runner_output)
 
     def adjust_computed_tokens(

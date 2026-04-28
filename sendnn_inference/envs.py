@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     SENDNN_INFERENCE_WARMUP_BATCH_SIZES: list[int] | None = None
     SENDNN_INFERENCE_PERF_METRIC_LOGGING_ENABLED: int = 0
     SENDNN_INFERENCE_PERF_METRIC_LOGGING_DIR: str = "/tmp"
+    SENDNN_INFERENCE_CP_SCHEDULER_LOGGING_ENABLED: int = 0
+    SENDNN_INFERENCE_CP_SCHEDULER_LOGGING_DIR: str = "/tmp"
     SENDNN_INFERENCE_OVERRIDE_SIGNALS_HANDLER: bool = False
     SENDNN_INFERENCE_CP_INTERLEAVE_STEPS: bool = True
     SENDNN_INFERENCE_UPDATE_THREAD_CONFIG: bool = True
@@ -82,6 +84,18 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # logs are written to /tmp.
     "SENDNN_INFERENCE_PERF_METRIC_LOGGING_DIR": lambda: os.getenv(
         "SENDNN_INFERENCE_PERF_METRIC_LOGGING_DIR", "/tmp"
+    ),
+    # Enable chunked prefill scheduler logging. This captures scheduler state
+    # at each step including waiting/running requests, tkv, and token counts.
+    # Logs are written to a .jsonl file for debugging and analysis.
+    # It is turned off by default.
+    "SENDNN_INFERENCE_CP_SCHEDULER_LOGGING_ENABLED": lambda: int(
+        os.getenv("SENDNN_INFERENCE_CP_SCHEDULER_LOGGING_ENABLED", 0)
+    ),
+    # Directory to write chunked prefill scheduler logging files. By default,
+    # logs are written to /tmp.
+    "SENDNN_INFERENCE_CP_SCHEDULER_LOGGING_DIR": lambda: os.getenv(
+        "SENDNN_INFERENCE_CP_SCHEDULER_LOGGING_DIR", "/tmp"
     ),
     # If set, override the signal handler for sendnn-inference on
     # vLLM V1 + torch_sendnn backend to be able to gracefully
