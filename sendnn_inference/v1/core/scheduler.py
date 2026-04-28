@@ -199,7 +199,7 @@ class ChunkedPrefillSpyreScheduler(SpyreScheduler):
         )
 
         self._cp_steps_logger = cp_scheduler_logger.create_cp_scheduler_logger(
-            self.scheduler_config.max_model_len, self.scheduler_config.max_num_seqs, self.block_size
+            self.max_model_len, self.scheduler_config.max_num_seqs, self.block_size
         )
 
     def update_from_output(self, scheduler_output, model_runner_output):
