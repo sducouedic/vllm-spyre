@@ -16,6 +16,7 @@ nav:
       - Environment Variables: user_guide/env_vars.md
       - Supported Features: user_guide/supported_features.md
       - Supported Models: user_guide/supported_models.md
+      - Performance Tuning: user_guide/performance.md
     - Developer Guide:
       - Contributing: contributing/README.md
       - Maintaining: contributing/maintaining.md
@@ -36,6 +37,7 @@ nav:
     - Environment Variables: user_guide/env_vars.md
     - Supported Features: user_guide/supported_features.md
     - Supported Models: user_guide/supported_models.md
+    - Performance Tuning: user_guide/performance.md
   - Developer Guide:
     - Contributing: contributing/README.md
     - Maintaining: contributing/maintaining.md
