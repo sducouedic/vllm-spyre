@@ -3,7 +3,7 @@
 This page explains how sendnn-inference overrides the vLLM V1 scheduler for decoder (generation) models to respect Spyre hardware constraints, and how requests are padded during prefill and decode execution.
 
 !!! warning
-    
+
     All values and parameters (such as the chunk size) used in the figures are for illustration only; for the real configuration values refer to [configuration](../user_guide/configuration.md)
 
 ## Overview
@@ -83,8 +83,8 @@ The plot below illustrates the full-blocks padding and per-request tkv. We can o
 1. The tkv value of any of the requests is about to reach a new block (steps 11, 16, 52)
 2. A long request finishes, so the other requests can remove their padding blocks (steps 58, 65)
 
-!!! note 
-    In the interactive figure below, we don't show the right-padding, because the max-output-tokens is displayed. But it follows the same logic as shown in the [prefill padding visualization](#visualization-prefill-padding): we pad individual tokens until the block's right boundary.
+!!! note
+    In the interactive figure below, we don't show the right-padding, because the max-output-tokens is displayed. But it follows the same logic as shown in the [prefill padding visualization](#visualization--prefill-padding): we pad individual tokens until the block's right boundary.
 
 <iframe src="../assets/plots/scheduling_padding_tkv_jump.html" width="100%" height="700px" frameborder="0"></iframe>
 
@@ -99,7 +99,7 @@ The scheduler enforces a strict priority order:
 1. **One prefill at a time.** Only one request can be in its prefill phase at any moment.
 2. **Ongoing prefill has priority.** A request that has already started chunked prefill is always scheduled before any new request.
 3. **Prefill–decode interleaving.** When interleaving is enabled, two consecutive prefill steps are forbidden if there are any actively decoding requests. This prevents decoding requests from stalling while a long prompt is being prefilled.
-    
+
     !!! note
         Prefill-decode interleaving is enabled by default, but can be disabled or enabled by setting the `SENDNN_INFERENCE_CP_INTERLEAVE_STEPS` environment variable to 0 or 1 respectively.
 
@@ -126,27 +126,27 @@ Checked when the remaining prompt tokens fit within the next chunk — meaning t
 
     ??? info "Volumetric Constraint – Additional Details"
         The hardware imposes a ceiling on the total KV-cache volume: the product of the batch size and max-tkv must not exceed a fixed limit at any step.
-    
+
         The volumetric check answers: *if we admit this request now, will `batch_size × max-tkv` ever exceed the hardware limit?*
-    
+
         The check projects the worst-case future evolution of the batch:
-    
+
         - For the **new request**, its maximum future tkv is its current tkv plus the maximum number of tokens it could still generate.
-        - For each **currently decoding request**, its maximum future tkv is its current tkv plus the maximum tokens it could still generate, plus one block to account for a potential padding realignment.  
-        
+        - For each **currently decoding request**, its maximum future tkv is its current tkv plus the maximum tokens it could still generate, plus one block to account for a potential padding realignment.
+
         Because shorter sequences finish earlier and reduce the effective batch size, the constraint is tightest at the steps where the longest-lived requests are still running together. The check iterates over decoding requests in order of increasing maximum future tkv: as each is projected to finish, the batch size shrinks and the binding constraint shifts to the next-longest sequence. The incoming request is accepted only if no projected future state exceeds the hardware limit.
-   
+
 ##### Visualization – Scheduler Constraints
 
 The visualization below illustrates all the scheduling constraints that can prevent a request from being scheduled at a given step. The different cases mentioned above can be observed in the run.
 
-* **Decode batch capacity:** for both requests 6 and 7, they must wait for a free slot in the decoding batch before they can start prefilling.
+- **Decode batch capacity:** for both requests 6 and 7, they must wait for a free slot in the decoding batch before they can start prefilling.
 
-* **Prefill-decode interleaving** can be observed during the prefill of requests 1, 2, and 7, where consecutive chunk prefills are separated by an individual decode step. Individual decode steps are also visible between the prefills of consecutive requests.
+- **Prefill-decode interleaving** can be observed during the prefill of requests 1, 2, and 7, where consecutive chunk prefills are separated by an individual decode step. Individual decode steps are also visible between the prefills of consecutive requests.
 
-* **Max-model-length constraint:** the effect can be observed at the time of scheduling request 1. Because the prompt of request 1 is very long, and because the max-output tokens of request 0 is large, scheduling request 1 directly would move the tkv to the fourth block, and the max-output tokens of request 1 would be "pushed" beyond max-context-len. Therefore, after the second chunk completed prefill at step 5, we hold back the third chunk prefill until request 0 completed at step 22.
+- **Max-model-length constraint:** the effect can be observed at the time of scheduling request 1. Because the prompt of request 1 is very long, and because the max-output tokens of request 0 is large, scheduling request 1 directly would move the tkv to the fourth block, and the max-output tokens of request 1 would be "pushed" beyond max-context-len. Therefore, after the second chunk completed prefill at step 5, we hold back the third chunk prefill until request 0 completed at step 22.
 
-* **Volumetric constraint:** the prefill of request 4 is deferred due to the volumetric constraint. If it had been scheduled at step 35, the max-tkv would have been 426, leading to a volume of `426 × 4 (requests) = 1704`, which exceeds the maximum accepted volume of 1536. We therefore wait until request 2 finishes at step 45.
+- **Volumetric constraint:** the prefill of request 4 is deferred due to the volumetric constraint. If it had been scheduled at step 35, the max-tkv would have been 426, leading to a volume of `426 × 4 (requests) = 1704`, which exceeds the maximum accepted volume of 1536. We therefore wait until request 2 finishes at step 45.
 
 <iframe src="../assets/plots/scheduling_admission_constraints.html" width="100%" height="700px" frameborder="0"></iframe>
 
@@ -166,12 +166,11 @@ The chunk that straddles the cache boundary — where some of its blocks are cac
 
 When prefix caching is enabled, a newly admitted request may have part of its prompt already present in the KV cache. The scheduler accounts for this hit when evaluating first-chunk and last-chunk conditions, so that admission constraints are applied against the effective remaining prompt length rather than the full prompt length.
 
-##### Visualization – Prefix Caching
+#### Visualization – Prefix Caching
 
-The visualization below shows a typical cache hit. Since the last prefix block resides in a chunk that needs to be recomputed, we read from the existing cached blocks and redirect the write to a dummy block. This results in the inner “padding” section between 1024 and 1088 (a single block).
+The visualization below shows a typical cache hit. Since the last prefix block resides in a chunk that needs to be recomputed, we read from the existing cached blocks and redirect the write to a dummy block. This results in the inner "padding" section between 1024 and 1088 (a single block).
 
 <iframe src="../assets/plots/prefix_caching_1.html" width="100%" height="700px" frameborder="0"></iframe>
-
 
 The last chunk must always be recomputed, even if it contains a full prefix hit:
 

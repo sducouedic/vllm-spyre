@@ -20,7 +20,8 @@ The recommended tool for performance benchmarking is the [vLLM bench CLI tool](h
 How to use `vllm bench serve`:
 
 1. Start the server:
-```
+
+```bash
 vllm serve \
     --model {model} \
     --max-model-len {max-model-len} \
@@ -29,8 +30,9 @@ vllm serve \
 
 See the [Supported Models](./supported_models.md) page for supported models and their respective configuration.
 
-2. Run the benchmarking script (minimal command):
-```
+1. Run the benchmarking script (minimal command):
+
+```bash
 vllm bench serve \
     --backend vllm \
     --model {model} \
