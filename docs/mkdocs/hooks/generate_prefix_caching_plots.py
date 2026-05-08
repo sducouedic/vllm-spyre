@@ -601,7 +601,7 @@ def configure_figure_layout(
                             None,
                             {
                                 "fromcurrent": True,
-                                "frame": {"duration": 750, "redraw": True},
+                                "frame": {"duration": 25, "redraw": True},
                                 "transition": {"duration": 0},
                             },
                         ],
