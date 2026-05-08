@@ -105,6 +105,23 @@ The time-per-output-token (TPOT) is the mean time to generate the next decoded t
 
 The end-to-end latency (E2EL) is the time from submitting a request to the server until the last output token is received. This metric is not reported by default; use `--percentile-metrics ttft,tpot,itl,e2el` to enable it.
 
+## Visualization – Results Interpretation
+
+For the run described in the [Scheduler Constraints visualization](../contributing/scheduler.md#visualization-scheduler-constraints), we show the corresponding timeline that would be obtained using `--plot-timeline`. Here the timeline is reconstructed (because we cannot control exactly the arrival step of the requests with `vllm bench serve`), but it follows the shape of what would be produced by `--plot-timeline`. We assume a decode takes 1 unit time, and a chunked prefill takes 8 unit times.
+
+**Observations**:
+
+- The TTFT of request 0 corresponds to its prefill time (8 unit times) because it gets scheduled directly when joining (0 waiting time)
+
+- The two first chunked prefill that request 1 undergoes during the decode of request 0 are reflected through two ITL spikes in request 0 (decode interrupted)
+
+- If we didn't have prefill-decode interleaving, we would see fewer but longer ITL spikes. For example, we see five consecutive ITLS of 9 unit time in request 1. Those corresponds to the back-to-back prefills of request 2 and 3. Without interleaving, we would have one single long ITL of `5 * 8 + 1 (for the decode) = 41` unit times.
+
+- As soon as one request gets stuck (due to various scheduling constraints), its TTFT increases, and so does the TTFT of all the requests queued behind it. This is the case for request 1 for example.
+
+- As we can see with request 2, a long prompt with many tokens take multiple chunks to prefill and also delays the other requests.
+
+<iframe src="../assets/plots/timeline_admission_constraints.html" width="100%" height="630px" frameborder="0"></iframe>
 
 ## Performance Tuning
 

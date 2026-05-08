@@ -46,6 +46,7 @@ hooks:
   - docs/mkdocs/hooks/generate_scheduling_plots.py
   - docs/mkdocs/hooks/generate_prefill_only_plots.py
   - docs/mkdocs/hooks/generate_prefix_caching_plots.py
+  - docs/mkdocs/hooks/generate_timeline.py
 
 plugins:
   - meta
