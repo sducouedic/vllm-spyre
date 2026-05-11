@@ -8,7 +8,7 @@ This page explains how sendnn-inference overrides the vLLM V1 scheduler for deco
 
 ## Overview
 
-The scheduler uses continuous batching: new requests are prefilled in chunks while previously admitted requests continue decoding. Because Spyre imposes specific constraints on the KV-cache, the scheduler applies additional admission rules on top of vLLM's defaults, and pads requests to meet alignment requirements.
+The scheduler uses continuous batching: new requests are prefilled then join the previously admitted requests in the decode batch. To minimize decoding delays, long prompts are split into chunks and the prefill is interleaved with decoding steps. Because Spyre imposes specific constraints on the KV-cache, the scheduler applies additional admission rules on top of vLLM's defaults, and pads requests to meet alignment requirements.
 
 ---
 
@@ -16,7 +16,7 @@ The scheduler uses continuous batching: new requests are prefilled in chunks whi
 
 **Block size**: The number of tokens per KV-cache block.
 
-**Chunk size**: The number of tokens processed in a single prefill step. Always a multiple of the block size. A prompt longer than the chunk size is split across multiple successive steps.
+**Chunk size**: The number of prompt tokens processed in a single prefill step. Always a multiple of the block size. A prompt longer than the chunk size is split across multiple successive steps.
 
 **Tkv**: The tkv stands for Token-Key-Value. For a given request, it is the padded token position up to which the KV cache is populated for that request.
 
@@ -30,7 +30,7 @@ The scheduler uses continuous batching: new requests are prefilled in chunks whi
 
 The padding strategy is designed to meet two constraints specific to Spyre:
 
-- **Decode alignment:** All sequences in the decode batch must occupy the same number of KV-cache blocks at every step. Shorter sequences are padded with full dummy blocks on the left.
+- **Decode alignment:** All sequences in the decode batch must occupy the same number of KV-cache blocks at every step. Shorter sequences are padded with full dummy blocks on the left. Block 0 is always used for padding, so the memory used for padding is a constant total of 64 bytes.
 - **Prefix caching:** Variable-length left-padding inside a block would corrupt hash-based block comparisons. By aligning prompts to block boundaries (using dummy block ids) we avoid left-padding inside any block, keeping block contents identical for equal token sequences.
 
 ### Prefill padding
@@ -58,7 +58,7 @@ These visualizations below show the chunked prefill process for a prompt of diff
 
 ### Decode padding
 
-During decode, every request generates exactly one new token per step.
+During decode, every request generates exactly one new token per step, as only standard autoregressive decoding is supported (speculative decoding and jump-forward decoding are not implemented).
 
 #### Left-padding with full blocks
 
@@ -74,13 +74,13 @@ Each request's tkv is its left-padding offset plus the number of tokens computed
 
 #### tkv jumping
 
-When a request generates enough tokens to require an additional KV-cache block, it would need one more block than the rest of the batch. To keep all block tables the same width, one fewer dummy block is prepended instead. This causes that request's tkv to jump forward by one block in a single step, while all other requests' tkv values increase by one as usual.
+When a request generates enough tokens to require an additional KV-cache block, it would need one more block than the rest of the batch. To keep the block table rectangular, either the request has left-padding and we remove one padding block — causing that request's tkv to jump backward — or it has no left-padding, in which case all other requests must each be prepended with one padding block, causing their tkv values to jump forward.
 
 ##### Visualization – Decode Padding
 
 The plot below illustrates the full-blocks padding and per-request tkv. We can observe the padding blocks being dynamically appended or removed leading to "jumps" in the tkv values from one step to another when:
 
-1. The tkv value of any of the requests is about to reach a new block (steps 11, 16, 52)
+1. The tkv value of any of the requests is about to reach a new block (steps 11, 16, 52). The tkv can jump backward as in steps 11 and 16, or forward as in step 52.
 2. A long request finishes, so the other requests can remove their padding blocks (steps 58, 65)
 
 !!! note
@@ -160,7 +160,7 @@ Whole chunks whose blocks are entirely cached can be skipped. However, the last 
 
 ### Boundary chunk
 
-The chunk that straddles the cache boundary — where some of its blocks are cached and some are not — is always fully recomputed. The KV writes for those blocks are redirected to a dummy block, leaving the cached values untouched while attention still reads from the real cached blocks.
+The chunk that straddles the cache boundary — where some of its blocks are cached and some are not — is always fully recomputed. The KV writes for those blocks are redirected to a dummy block, leaving the cached values untouched while attention still reads from the real cached blocks. This prevents the early divergence of the block list of prompts with shared prefixes. Only the last block is duplicated, which replicates the vLLM KV-cache behavior on GPU.
 
 ### Scheduling with prefix caching
 
